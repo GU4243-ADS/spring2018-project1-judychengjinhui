@@ -1,0 +1,421 @@
+---
+title: "spooky suspense--a text analysis of how SPOOKY authors create horror through suspense"
+author: "Judy Cheng"
+date: "February 4, 2018"
+output:
+  html_notebook: default
+  html_document: default
+---
+## Introduction
+In this assignment, I analyze how the three authors use suspense in their works to create horror. Suspense arouses excited expectation or uncertainty about what may happen--a horrific event is certainly bad, but having to wait for the horrific event to happen is even worse because of the additional torment during the process of waiting. 
+Therefore, it would be interesting to see how EAP, MWS, and HPL take advanage of suspense in their works--specifically, what are the similarities and differences among the authors in terms of the frequency that and literary devices with which they create suspense?  
+
+## Setup the libraries
+```{r, message = F, warning = F}
+packages.used <- c("ggplot2", "dplyr", "tibble", "tidyr",  "stringr", "tidytext","wordcloud")
+
+# <!-- # check packages that need to be installed. -->
+# <!-- packages.needed <- setdiff(packages.used, intersect(installed.packages()[,1], packages.used)) -->
+# 
+# <!-- # install additional packages -->
+# <!-- if(length(packages.needed) > 0) { -->
+# <!--   install.packages(packages.needed, dependencies = FALSE, repos = 'http://cran.us.r-project.org') -->
+# <!-- } -->
+
+
+
+install.packages(packages.used)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+library(tidyr)
+library(stringr)
+library(tidytext)
+library(wordcloud)
+
+```
+
+## Read in the data
+The following code assumes that the dataset `spooky.csv` lives in a `data` folder (and that we are inside a `docs` folder).
+
+```{r}
+spooky <- read.csv('../data/spooky.csv', as.is = TRUE)
+```
+
+## Data Cleaning
+
+We first use the `unnest_tokens()` function to drop all punctuation and transform all words into lower case.  At least for now, the punctuation isn't really important to our analysis -- we want to study the words.  In addition, `tidytext` contains a dictionary of stop words, like "and" or "next", that we will get rid of for our analysis, the idea being that the non-common words (...maybe the SPOOKY words) that the authors use will be more interesting.
+
+```{r}
+spooky_wrd <- unnest_tokens(spooky, word, text)%>%
+              anti_join(stop_words, by = "word")
+```
+
+## 1. Suspenseful Words
+First, let's look at how the authors use words to create suspense. To do this, we apply sentiment analysis using NRC sentiment lexion. “The NRC Emotion Lexicon is a list of English words and their associations with eight basic emotions (anger, fear, anticipation, trust, surprise, sadness, joy, and disgust) and two sentiments (negative and positive). The annotations were manually done by crowdsourcing.” Since we're interested only in suspenseful words, we include in our analysis only words that fall into these categories of the NRC emtion lexicon: "fear", "anticipation", and "surprise".
+```{r}
+#filter out suspenseful words from the NRC emotion lexicon
+nrc_suspense <- filter(get_sentiments('nrc'), sentiment == "fear"|sentiment =="anticipation"|sentiment =="surprise")
+
+#now the spooky_word data frame contains only suspenseful words
+suspense <- inner_join(spooky_wrd, nrc_suspense, by = "word")
+```
+
+## 1.1 Each has their favorites
+
+What words does each author use most frequently?
+
+First, we use word clouds to investigate the suspenseful words that each author uses most frequently, generating a word cloud for each author.
+
+Take a look at Mary Shelley's favorite suspenseful words first--
+```{r}
+suspense %>%
+  filter(author == "MWS") %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 30, color = "purple4"))
+
+```
+
+
+"Death" is the most frequently used suspenseful word by MWS. However, the other suspenseful words are quite positive. For example, "hope","happiness","sun","sweet","lovely",etc.
+
+On a separate note(unrelated to suspense), based on this word cloud interestingly illustrated and confirmed some literary comments on MWS's writing style and themes. 
+
+According to Wikipedia, 
+    "Shelley's writings focus on the role of the family in society and women's role within that family. She celebrates the 'feminine affections and compassion' associated with the family and suggests that civil society will fail without them.Shelley was 'profoundly committed to an ethic of cooperation, mutual dependence, and self-sacrifice'."
+
+Indeed, even though this word cloud contains only words that belong to the "anticipation","fear","surprise" categories--a very small sample of all the words in MWS's works/text--the value that MWS places on family is clearly shown by her word choices, such as "mother","child","passion",etc.
+
+In addition, MWS has a reputation of being influenced by Romanticism and Enlightenment. It is not hard to see that her usage of words--"hope","youth","happiness"--confirms such reputation.
+
+What about Edgar Allan Poe? 
+```{r}
+suspense %>%
+  filter(author == "EAP") %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 30, color = "red4"))
+```
+Apparently, "time" is almost as abominable as "death", perhaps because we die after we run out of time. Time seems to be a central theme in EAP's writing--there are quite a few high-frequency words that are related to time, such as "finally","immediately", "suddenly".
+
+We can see that EAP is noticeably less positive than MWS, as he uses much fewer positive suspensful words--the only words that can be argued to have some positivity in them are "excitement"(or "excited"),"sun","elevation","art", and perhaps "god".
+
+Again, let's see how much this word cloud confirms common remarks on EAP's literary style and themes.
+According to Wikipedia,
+"His most recurring themes deal with questions of death, including its physical signs, the effects of decomposition, concerns of premature burial, the reanimation of the dead, and mourning."
+Well, I do not have a "doubt" that it would be wise to "escape" from the potential "accident" that would lead to a "murder" which "finally" results in someone's "death".
+
+
+
+Finally, let's look at H.P.Lovecraft.
+```{r}
+suspense %>%
+  filter(author == "HPL") %>%
+  count(word) %>%
+  with(wordcloud(word, n, max.words = 30, color = "black"))
+```
+H.P.Lovecraft is also obsessed with "death" and "time". In addition, he's all about the "horror" of the "unknown". Fear also seems to be a central theme, as evidenced by the frequent use of "fear","fright","frightful",and "frightened".
+His style is the most depressing among all three authors, as positivity is almost nonexistent in his typical suspenseful words. 
+
+## 1.2 All have something in common
+Now that we know that certain words such as "death" and "time" are central to all three authors, we'd like to figure out:  
+How does each author use the most common words?
+
+Let's look at what the most common words in the entire dataset are and how they are used by each author.
+```{r}
+foo <- suspense %>%
+  group_by(word, author) %>%
+  count()
+
+bar <- suspense %>%
+  group_by(word) %>%
+  count() %>%
+  rename(all = n)
+
+foo %>%
+  left_join(bar, by = "word") %>%
+  arrange(desc(all)) %>%
+  head(80) %>%
+  ungroup() %>%
+  ggplot(aes(reorder(word, all, FUN = min), n, fill = author)) +
+  geom_col() +
+  xlab(NULL) +
+  ylab("number of occurences")+
+  coord_flip() +
+  facet_wrap(~ author) +
+  theme(legend.position = "none")
+
+ggsave("most common words across authors.png",plot = last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+
+
+Although MWS is overall the most positive author among the three, she is also, perhaps surprisingly, the one who uses "death" the most.
+Some other observations:
+-MWS is really big on "hope"
+-HPL loves(or fears) the "unknown"
+-MWS is the most positive, HPL is the least positive, and EAP is in between
+
+
+## 1.3 idiosyncrasies are the best
+
+What words does each author uniquely use?
+
+In 1.1, we looked at how each author individually uses suspenseful words. In 1.2, we tried to add in a bit more comparison between the authors by looking at how the most frequently used suspenseful words are split between the authors. Now, we try to add in even more comparison between the authors, by uncovering the words that each author uniquely uses in comparison to other authors. Here, we use an TF-IDF(term frequency-inverse document frequency) approach to give more emphasis to words that are rare within the context of the entire dataset, in the hope that we'll discover words that are characteristic for a specific author.
+
+```{r}
+frequency <-suspense %>%
+  count(author, word)
+
+tf_idf <- frequency %>%
+  bind_tf_idf(word, author, n)
+
+tf_idf %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(author) %>%
+  top_n(20, tf_idf) %>%
+  ungroup() %>%  
+  ggplot(aes(word, tf_idf, fill = author)) +
+  geom_col() +
+  labs(x = NULL, y = "tf-idf") +
+  theme(legend.position = "none") +
+  facet_wrap(~ author, ncol = 3, scales = "free") +
+  coord_flip() +
+  labs(y = "TF-IDF values")
+
+
+ggsave("unique words by author.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+Each author's unique words again confirm their respective literary themes, which I have discussed above. 
+-MWS has many words related to Romantic ideas such as passion and family--"passion"(or "passionate"),"angel","festival","orphan","lover","maternal","marry".
+-one of HPL's central themes involves religion and superstition, therefore the "cult","hellish", and "deamon".
+-EAP is generally considered the inventor of the detective fiction genre. His works have influenced later authors of the detective/mystery genre, such as Henry James, Arthur Conan Doyle, B. Traven, and David Morrell. Here, EAP's distinctive use of "police","investigation","hypothesis" and other words are all suggestive of a thrilling detective story.
+
+
+
+
+
+##  2. Suspense through Punctuation
+Suspense can be created not only through words but also through other means...such as the ellipse you just saw here. Not all punctuations are created equal--some are more suspenseful than others; for example, the dash, the semicolon, the series of commas in a seemingly never-ending sentence like this one, and of course the exclamation or question mark at the end!
+
+##  2.1 Ellipses...
+Using ellipses is perhaps one of the best ways an author can create suspense through punctuation, and EAP is without a doubt a master of ellipses. 
+```{r}
+spooky%>%
+  filter(grepl("...",text,fixed=TRUE))%>%
+ ggplot(aes(author, fill = author)) +
+  geom_bar()+ 
+ theme(legend.position = "none")
+
+
+ggsave("ellipses.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+
+
+##  2.2 a series of commas
+A single comma indicates a brief pause, but a series of commas achieves more than a series of brief pauses, because the psychological effect of a series of short pauses is suspense,as you just don't know when a sentence like this one will end.
+```{r}
+spooky %>%
+  mutate(commas = str_count(text,pattern=",")) %>%
+ggplot(aes(commas,fill=author)) +
+  geom_density(bw = 0.05, alpha = 0.3) +
+  scale_x_log10() +
+  labs(x = "number of commas per sentence")
+
+ggsave("commas.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+We find:
+-all authors have two types of sentences--those with no or one comma, and those with many commas.
+-HPL seems to be more fond of writing long sentences that just drag on without a break.
+-EAP really likes inserting breaks/commas into his sentences
+
+
+Let's try to put the use of comma into perspective by also looking at the sentence length of each author's writing.
+```{r}
+spooky %>%
+  mutate(sen_len = str_length(text)) %>%
+  ggplot(aes(sen_len, fill = author)) +
+  geom_density(bw = 0.05, alpha = 0.3) +
+  scale_x_log10() +
+  labs(x = "Sentence length [# characters]")
+
+
+ggsave("sentence length.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+
+The sentence length graph tells us:
+-EAP write more short sentences than HPL and MWS
+-most of HPL's sentences are longer
+
+
+
+Putting it altogether, we can make some educated guesses about EAP's and HPL's respective typical sentence structure:
+-EAP's sentences are shorter, yet he uses more commas, which means he has a "staccato" style.
+-HPL's sentences are longer, yet he uses the fewer commas, which means he has a "legato" style.
+Let's verify our guess by running some code.
+```{r}
+spooky %>%
+  mutate(commas = str_count(text,pattern=","),sen_len = str_length(text),char_per_comma=sen_len/commas) %>%
+ggplot(aes(char_per_comma,fill=author)) +
+  geom_density(bw = 0.05, alpha = 0.3) +
+  scale_x_log10() +
+  labs(x = "number of characters per comma")
+
+ggsave("number of characters per comma.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+Indeed, the graph above shows the number of characters per comma(in a sentence) for each author, and there is a great discrepancy between EAP and HPL in terms of number of characters per comma. 
+
+Just for the sake of fun, let's try to find one or two sentences for each author that are representative of the author's typical sentence structure.
+
+This is what typical Edgar Allan Poe sentences look like:
+```{r}
+#get a representative sentence for EAP
+#find the sentence with the most commas
+choose_from<-spooky %>%
+  filter(author=="EAP")%>%
+  mutate(commas = str_count(text,pattern=","),sen_len = str_length(text))%>%
+  arrange(desc(commas))%>%
+  head(n=1L)
+
+choose_from[1,2]
+```
+Now check out this sentence. Three commas in a sentence of 5 words, EAP is truly a staccato genius.
+```{r}
+#find the sentence with the least number of characters per comma for EAP
+comma_series<-spooky %>%
+ filter(author=="EAP")%>%
+  mutate(commas = str_count(text,pattern=","),sen_len = str_length(text),char_per_comma=sen_len/commas)%>%
+  arrange(char_per_comma)%>%
+  head(n=2L)
+as.factor(comma_series[1,2])
+```
+
+H.P.Lovecraft, on the other hand, just rambles on without stopping for breath.
+```{r}
+#get a representative sentence for HPL
+#find the longest sentence with the least commas
+choose_from<-spooky %>%
+  filter(author=="HPL")%>%
+  mutate(commas = str_count(text,pattern=","),sen_len = str_length(text))%>%
+  arrange(commas,desc(sen_len))%>%
+  head(n=1L)
+as.factor(choose_from[1,2])
+```
+
+This is even worse; check it out.
+```{r}
+#find the sentence with the most number of characters per comma for HPL
+choose_from<-spooky %>%
+  filter(author=="HPL")%>%
+  mutate(commas = str_count(text,pattern=","),sen_len = str_length(text),char_per_comma=sen_len/commas)%>%
+  filter(commas!=0)%>%
+  arrange(desc(char_per_comma))%>%
+  head(n=1L)
+choose_from[1,2]
+```
+
+##  2.3 semicolons to the rescue
+
+Besides commas, semicolons are also often used to insert breaks into a sentence.Previously, we discovered that EAP loves commas while HPL seems to avoid them. Does the same pattern re-establish itself when it comes to semicolons? 
+```{r}
+spooky %>%
+  mutate(semicolon = str_count(text,pattern=";")) %>%
+ggplot(aes(semicolon,fill=author)) +
+  geom_density(bw = 0.05, alpha = 0.3) +
+  scale_x_log10() +
+  labs(x = "number of semicolons per sentence")
+
+
+ggsave("number of semicolons per sentence.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+
+When it comes to semicolons, HPL again has more sentences with no or one semicolon than the other two authors, and he has fewer sentences with many semicolons. 
+
+
+The graph below shows the distribution of the number of characters (in a sentence) per semicolon. It confirms our finding from the graph above: MWS's distribution is wider and the centers at a lower value of num_char_per_semicolon, meaning that she tends to write more sentences that have frequent semicolons in them. HPL's distribution is narrower and peaks towards larger num_char_per_semicolon values, meaning that most of his sentences tend NOT to have frequent semicolons.
+
+
+
+```{r}
+spooky %>%
+  mutate(semicolons = str_count(text,pattern=";"),sen_len = str_length(text),char_per_semicolon=sen_len/semicolons) %>%
+ggplot(aes(char_per_semicolon,fill=author)) +
+  geom_density(bw = 0.05, alpha = 0.3) +
+  scale_x_log10() +
+  labs(x = "number of characters per semicolon")
+
+
+ggsave("number of characters per semicolon.png",plot =last_plot(),path = '../figs/',width = 20, height = 20, units = "cm")
+```
+
+
+So what's the story behind using commas VS semicolons? It seems that HPL simply does not like any breaks in his sentences, regardless of whether the break comes with a comma or a semicolon. However, EAP seeems to have a special preference for the kind of breaks(or the staccato effects) created by commas, as he is no longer the top user when it comes to semicolons. MWS now becomes the champion of semicolons.
+
+In the analysis of commas, I have already compared EAP's and HPL's typical sentence structures. Now, based on the analysis of semicolons, I make a hypothesis about MWS's typical sentence structure by comparing it to EAP's and HPL's.
+
+To understand the stylistic differences between the authors, it is important to first understand the difference in effects that a comma and a semicolon create.
+A comma creates more suspense than a semicolon, because it tells the reader that the sentence is far from ending. A semicolon, on the other hand, indicates a small logical ending in itself, even though the larger sentence has not ended. If a period indicates "full stop", a semicolon is like a "half stop".
+
+Armored with the above knowledge, let's continue to make some bold hypotheses.
+
+While MWS and EAP both insert breaks into their sentences, EAP takes a particular liking to the staccato style, where his sentences resemble a series of short, detached musical notes, almost to the extent of being choppy. His sentences seem to be spoken by someone who, just, climbed, ten, flights, of, stairs, and, can't, catch, their, breath. An example:
+```{r}
+as.factor(comma_series[2,2])
+```
+
+MWS writes elegant, longer sentences that have natural breaks when and where they are needed. Her sentences resemble normal human speech; the person speaks and pauses at places where or intervals when he thinks he has reached a logical semi-conclusion, or when he needs to catch his breath. Is this hypothesis correct? Let's check out a sentence.
+```{r}
+#find the sentence with the most semicolons for MWS
+choose_from<-spooky %>%
+  filter(author=="MWS")%>%
+  mutate(semicolons = str_count(text,pattern=";"))%>%
+  arrange(desc(semicolons))%>%
+  head(n=1L)
+as.factor(choose_from[1,2])
+```
+Hmm...interesting. The above MWS sentence has many semicolons, yet it doesn't seem to show that MWS inserts semicolons at natural places. Indeed, this sentence looks a bit choppy, even though not as staccato-ish as EAP's sentences. Rather, it seems to be showing that MWS uses semicolons to give EMPHASIS to individual parallel segments within a sentence. MWS uses semicolons for PARALLELISM!!!
+
+
+HPL also writes longer sentences but unlike MWS he does not allow the reader to pause even when they feel a strong desire to pause yes just like how you feel now; he begrudgingly inserts some commas and semicolons but he won't do it until it becomes absolutely critical and obvious that his reader will die of lack of air in their lungs if he doesn't let them stop soon. 
+Try to read the following sentence out loud without ever stopping for breath unless when permitted by HPL. Do you feel you could use some air after reading this?
+
+```{r}
+#find the sentence with the most number of characters per comma for HPL
+choose_from<-spooky %>%
+  filter(author=="HPL")%>%
+  mutate(semicolons = str_count(text,pattern=";"),sen_len = str_length(text))%>%
+  filter(semicolons!=0)%>%
+  mutate(char_per_semicolon=sen_len/semicolons)%>%
+  arrange(desc(char_per_semicolon))%>%
+  head(n=2L)
+
+as.factor(choose_from[2,2])  
+```
+
+
+##  2.4 Curiosity?
+Questions spark curiosity. Doesn't it? When you read a sentence that ends with a question mark, you develop a question in your mind, and you want to find out the answer to that question. This creates suspense. So, let's, find out who has the most inquisitive mind, shall we? 
+```{r}
+spooky%>%
+  filter(grepl("?",text,fixed=TRUE))%>%
+ ggplot(aes(author, fill = author)) +
+  geom_bar()+ 
+ theme(legend.position = "none")
+```
+EAP is significantly more inquisitive than the other authors! After all, the father of detective stories has more questions to investigate.
+Now, isn't this just a little odd, a little queer, eh,eh,eh?
+```{r}
+#find the sentence with the most semicolons for MWS
+choose_from<-spooky %>%
+  filter(author=="EAP")%>%
+  mutate(q=str_count(text,pattern="[*?*]"))%>%
+  arrange(desc(q))%>%
+  head(n=1L)
+as.factor(choose_from[1,2])
+```
+
+
+
+
+
+I hope you enjoyed reading my text analysis of the SPOOKY authors' works. To recap, I analyzed how each author creates suspense through words and punctuation. While doing so, I also 1)compared how much the machine-learned text analysis confirms the human-generated remarks on the authors' respective literary themes and 2)uncovered each author's typical sentence structure.
+The takeaway: HPL is gloomy depressing long; MWS is positive and balanced; EAP is quirky, inquisitive, and choppy.
